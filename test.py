@@ -62,3 +62,57 @@ def remove_zero_and_get_delta(p, v, y):
     
 p, v, y = window_data_instr(data_is, 26)
 my_x, my_y = remove_zero_and_get_delta(p, v, y)
+
+
+from keras.models import Sequential
+from keras.layers import Merge, Dense, Dropout
+from keras.layers.normalization import BatchNormalization
+from keras.optimizers import Adam
+
+
+my_batch_size = 12800
+my_nb_epoch = 300
+my_layer_len_price = 14
+my_layer_len_vol = 14
+my_layer_total = 14
+my_lr = 0.01
+
+
+encoder_a = Sequential()
+encoder_a.add(Dense(my_layer_len_price, activation='relu', input_shape=(14,), init="glorot_normal") )
+encoder_a.add(BatchNormalization())
+
+encoder_b = Sequential()
+encoder_b.add(Dense(my_layer_len_vol, activation='relu', input_shape=(14,), init="glorot_normal") )
+encoder_b.add(BatchNormalization())
+
+m = Sequential()
+m.add(Merge([encoder_a, encoder_b], mode='concat'))
+m.add(Dense(my_layer_total, activation='relu', init="glorot_normal"))
+m.add(BatchNormalization())
+m.add(Dropout(0.2))
+
+m.add(Dense(my_layer_total, activation='relu', init="glorot_normal"))
+m.add(BatchNormalization())
+m.add(Dropout(0.2))
+
+m.add(Dense(1, init="glorot_normal"))
+
+import keras.backend as K
+
+def one_minus_r_squared(y_true, y_pred):
+    SS_res =  K.sum(K.square( y_true-y_pred )) 
+    SS_tot = K.sum(K.square( y_true - K.mean(y_true) ) ) 
+    return (SS_res/(SS_tot + K.epsilon()) )
+
+def r_square(y_true, y_pred):
+    return 1 - one_minus_r_squared(y_true, y_pred)
+
+my_adam = Adam(lr = my_lr)
+
+m.compile(optimizer=my_adam, loss=one_minus_r_squared, metrics=[r_square])
+
+# lr=0.001
+
+m.fit([my_x_norm[:, :14], my_x_norm[:, -14:]], my_y, batch_size=my_batch_size, nb_epoch=my_nb_epoch,
+     validation_data=([my_x_os1_norm[:, :14], my_x_os1_norm[:, -14:]], my_y_os1))
